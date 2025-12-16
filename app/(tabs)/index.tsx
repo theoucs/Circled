@@ -570,19 +570,19 @@ function isTapOnCircle(tapX: number, tapY: number, circleX: number, circleY: num
   return distance <= hitRadius;
 }
 
-// Sons locaux (graves à aigus)
-const SOUND_FILES = [
-  require('../../assets/sounds/tap1.mp3'),
-  require('../../assets/sounds/tap2.mp3'),
-  require('../../assets/sounds/tap3.mp3'),
-];
+// Son unique qui varie en hauteur
+const TAP_SOUND = require('../../assets/sounds/tap2.mp3');
 
-// Système de son pour les taps avec fichiers audio réels
+// Pool de sons pour permettre plusieurs lectures simultanées
+const SOUND_POOL_SIZE = 5;
+
+// Système de son pour les taps avec pool de sons
 class TapSoundSystem {
-  private sounds: Audio.Sound[] = [];
+  private soundPool: Audio.Sound[] = [];
+  private currentSoundIndex = 0;
   private isInitialized = false;
   
-  // Initialiser et pré-charger tous les sons
+  // Initialiser et pré-charger un pool de sons
   async initialize() {
     if (this.isInitialized) return;
     
@@ -594,42 +594,31 @@ class TapSoundSystem {
         shouldDuckAndroid: true,
       });
       
-      // Pré-charger tous les sons
-      for (const soundFile of SOUND_FILES) {
-        const { sound } = await Audio.Sound.createAsync(soundFile, {
+      // Créer un pool de sons identiques
+      for (let i = 0; i < SOUND_POOL_SIZE; i++) {
+        const { sound } = await Audio.Sound.createAsync(TAP_SOUND, {
           shouldPlay: false,
-          volume: 0.4,
+          volume: 0.5,
         });
-        this.sounds.push(sound);
+        this.soundPool.push(sound);
       }
       
       this.isInitialized = true;
-      console.log('Tap sounds initialized successfully');
+      console.log(`Tap sound pool initialized with ${SOUND_POOL_SIZE} sounds`);
     } catch (error) {
-      console.warn('Error initializing tap sounds:', error);
+      console.warn('Error initializing tap sound pool:', error);
       this.isInitialized = false;
     }
   }
   
-  // Obtenir l'index du son et le playback rate en fonction du score
-  getSoundConfig(score: number): { soundIndex: number; rate: number } {
-    // Progression sur 60 points
-    const progress = Math.min(score / 60, 1);
-    
-    // Choisir le son de base (0, 1, ou 2)
-    const soundIndexFloat = progress * (SOUND_FILES.length - 1);
-    const soundIndex = Math.floor(soundIndexFloat);
-    
-    // Varier le rate pour affiner la hauteur (0.8 à 1.5)
-    const rate = 0.8 + progress * 0.7;
-    
-    return {
-      soundIndex: Math.min(soundIndex, SOUND_FILES.length - 1),
-      rate,
-    };
+  // Calculer le playback rate en fonction du score
+  getPlaybackRate(score: number): number {
+    // Progression douce de 0.6 (grave) à 2.0 (aigu) sur ~50 points
+    const progress = Math.min(score / 50, 1);
+    return 0.6 + progress * 1.4;
   }
   
-  // Jouer un son avec variation de hauteur selon le score
+  // Jouer le son avec variation de hauteur selon le score
   async playTapSound(score: number) {
     if (!this.isInitialized) {
       await this.initialize();
@@ -637,29 +626,33 @@ class TapSoundSystem {
     }
     
     try {
-      const { soundIndex, rate } = this.getSoundConfig(score);
-      const sound = this.sounds[soundIndex];
+      // Utiliser le prochain son disponible du pool (rotation circulaire)
+      const sound = this.soundPool[this.currentSoundIndex];
+      this.currentSoundIndex = (this.currentSoundIndex + 1) % SOUND_POOL_SIZE;
       
       if (sound) {
-        // Réinitialiser la position et jouer
+        const rate = this.getPlaybackRate(score);
+        
+        // Arrêter le son s'il joue déjà, puis le rejouer
+        await sound.stopAsync();
         await sound.setPositionAsync(0);
         await sound.setRateAsync(rate, true);
         await sound.playAsync();
       }
     } catch (error) {
-      // Fallback silencieux
-      console.warn('Error playing tap sound:', error);
+      // Fallback silencieux - essayer le prochain son du pool
+      console.warn('Error playing tap sound, trying next in pool:', error);
     }
   }
   
   // Nettoyer les ressources
   async cleanup() {
-    for (const sound of this.sounds) {
+    for (const sound of this.soundPool) {
       try {
         await sound.unloadAsync();
       } catch {}
     }
-    this.sounds = [];
+    this.soundPool = [];
     this.isInitialized = false;
   }
 }
