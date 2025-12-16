@@ -77,7 +77,7 @@ export function AuthModal({ visible, onClose, onAuthSuccess, userId, username }:
           const localHighscore = await loadLocalHighscore();
           
           // Attendre que le trigger se termine
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Mettre à jour le username et le highscore local
           const { error: updateError } = await supabase
@@ -89,12 +89,19 @@ export function AuthModal({ visible, onClose, onAuthSuccess, userId, username }:
             .eq('id', authData.user.id);
 
           if (updateError) {
-            console.warn('Error updating profile:', updateError);
+            console.error('Error updating profile:', updateError);
+            throw updateError;
           }
 
-          Alert.alert('Succès', 'Compte créé ! Vous êtes maintenant connecté.');
+          // Attendre un peu pour que l'update soit propagée
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          console.log('Profile updated successfully with username:', usernameInput);
+          
           resetForm();
           onAuthSuccess();
+          
+          Alert.alert('Succès', 'Compte créé ! Vous êtes maintenant connecté.');
         }
       } else {
         // Connexion

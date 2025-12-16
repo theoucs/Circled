@@ -1393,6 +1393,9 @@ export default function HomeScreen() {
         visible={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onAuthSuccess={async () => {
+          // Attendre un peu pour que Supabase finalise les écritures
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
           // Recharger la session pour obtenir l'utilisateur connecté
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
