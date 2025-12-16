@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 import { AuthModal } from '../../components/AuthModal';
+import { LeaderboardModal } from '../../components/LeaderboardModal';
 import { Canvas, Text as SkiaText, Skia, BlurMask, Group, matchFont, Circle } from '@shopify/react-native-skia';
 import Animated, {
   useSharedValue,
@@ -743,6 +744,7 @@ export default function HomeScreen() {
   
   // Authentification
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   
@@ -1368,8 +1370,7 @@ export default function HomeScreen() {
             style={styles.bottomLeftIcon}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              // TODO: Navigation vers le leaderboard
-              console.log('Leaderboard pressed');
+              setShowLeaderboardModal(true);
             }}
           >
             <Ionicons name="trophy-outline" size={28} color={COLORS.white} />
@@ -1405,6 +1406,12 @@ export default function HomeScreen() {
         }}
         userId={userId}
         username={username}
+      />
+
+      {/* Modal du classement */}
+      <LeaderboardModal
+        visible={showLeaderboardModal}
+        onClose={() => setShowLeaderboardModal(false)}
       />
     </View>
   );
