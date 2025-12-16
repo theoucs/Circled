@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../lib/supabase';
+import { AuthModal } from '../../components/AuthModal';
 import { Canvas, Text as SkiaText, Skia, BlurMask, Group, matchFont, Circle } from '@shopify/react-native-skia';
 import Animated, {
   useSharedValue,
@@ -717,12 +719,32 @@ async function loadHighscore(): Promise<number> {
   return 0;
 }
 
+// Fonction pour sauvegarder le highscore sur Supabase
+async function saveHighscoreToSupabase(userId: string, newHighscore: number): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ highscore: newHighscore })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    console.log('Highscore saved to Supabase:', newHighscore);
+  } catch (error) {
+    console.warn('Error saving highscore to Supabase:', error);
+  }
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
-  // Highscore (persisté localement)
+  // Highscore (persisté localement et sur Supabase)
   const [highscore, setHighscore] = useState(0);
   const [isHighscoreLoaded, setIsHighscoreLoaded] = useState(false);
+  
+  // Authentification
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   
   // Phase du jeu
   const [gamePhase, setGamePhase] = useState<GamePhase>('home');
@@ -785,12 +807,41 @@ export default function HomeScreen() {
     };
   }, []);
 
-  // Charger le highscore au démarrage
+  // Charger la session utilisateur au démarrage
   useEffect(() => {
-    loadHighscore().then(savedHighscore => {
-      setHighscore(savedHighscore);
-      setIsHighscoreLoaded(true);
+    // Vérifier si l'utilisateur est connecté
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        // Charger le profil
+        loadUserProfile(session.user.id);
+      } else {
+        // Charger le highscore local si pas connecté
+        loadHighscore().then(savedHighscore => {
+          setHighscore(savedHighscore);
+          setIsHighscoreLoaded(true);
+        });
+      }
     });
+
+    // Écouter les changements d'authentification
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        loadUserProfile(session.user.id);
+      } else {
+        setUserId(null);
+        setUsername(null);
+        // Recharger le highscore local
+        loadHighscore().then(savedHighscore => {
+          setHighscore(savedHighscore);
+        });
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Gestion du countdown
@@ -829,6 +880,28 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [gamePhase]);
 
+  // Charger le profil utilisateur depuis Supabase
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username, highscore')
+        .eq('id', userId)
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        setUsername(data.username);
+        setHighscore(data.highscore);
+        setIsHighscoreLoaded(true);
+        console.log('User profile loaded:', data);
+      }
+    } catch (error) {
+      console.warn('Error loading user profile:', error);
+    }
+  };
+
   // Fonction appelée en cas de game over (avec l'id et la position du cercle qui a expiré)
   const handleGameOver = useCallback((circleId: number, circleX: number, circleY: number) => {
     // Bloquer immédiatement les taps (ref synchrone)
@@ -862,8 +935,13 @@ export default function HomeScreen() {
       if (currentScore > highscore) {
         const newHighscore = currentScore;
         setHighscore(newHighscore);
-        // Sauvegarder le nouveau highscore
-        saveHighscore(newHighscore);
+        
+        // Sauvegarder sur Supabase si connecté, sinon en local
+        if (userId) {
+          saveHighscoreToSupabase(userId, newHighscore);
+        } else {
+          saveHighscore(newHighscore);
+        }
       }
       
       // Passer en phase game over
@@ -1303,14 +1381,20 @@ export default function HomeScreen() {
             style={styles.bottomRightIcon}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              // TODO: Navigation vers le profil
-              console.log('Profile pressed');
+              setShowAuthModal(true);
             }}
           >
             <Ionicons name="person-circle-outline" size={28} color={COLORS.white} />
           </Pressable>
         </>
       )}
+      
+      {/* Modal d'authentification */}
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onAuthSuccess={() => setShowAuthModal(false)}
+      />
     </View>
   );
 }
