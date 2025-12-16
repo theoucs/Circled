@@ -1,0 +1,23 @@
+# Force tous les fichiers texte à utiliser les fins de ligne Mac/Linux (LF)
+* text=auto eol=lf
+
+# Exclure les fichiers binaires (images, etc.) pour ne pas les corrompre
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.flv binary
+*.fla binary
+*.swf binary
+*.gz binary
+*.zip binary
+*.7z binary
+*.ttf binary
+*.eot binary
+*.woff binary
+*.pyc binary
+*.pdf binary
