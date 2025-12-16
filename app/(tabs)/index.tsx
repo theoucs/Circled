@@ -1394,6 +1394,8 @@ export default function HomeScreen() {
         visible={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onAuthSuccess={() => setShowAuthModal(false)}
+        userId={userId}
+        username={username}
       />
     </View>
   );

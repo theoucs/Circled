@@ -24,17 +24,19 @@ type AuthModalProps = {
   visible: boolean;
   onClose: () => void;
   onAuthSuccess: () => void;
+  userId: string | null;
+  username: string | null;
 };
 
-export function AuthModal({ visible, onClose, onAuthSuccess }: AuthModalProps) {
+export function AuthModal({ visible, onClose, onAuthSuccess, userId, username }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
   const [isSignUp, setIsSignUp] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
-    if (!email || !password || (isSignUp && !username)) {
+    if (!email || !password || (isSignUp && !usernameInput)) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
@@ -58,7 +60,7 @@ export function AuthModal({ visible, onClose, onAuthSuccess }: AuthModalProps) {
           
           const { error: updateError } = await supabase
             .from('profiles')
-            .update({ username: username })
+            .update({ username: usernameInput })
             .eq('id', authData.user.id);
 
           if (updateError) {
@@ -92,7 +94,22 @@ export function AuthModal({ visible, onClose, onAuthSuccess }: AuthModalProps) {
   const resetForm = () => {
     setEmail('');
     setPassword('');
-    setUsername('');
+    setUsernameInput('');
+  };
+
+  const handleSignOut = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      Alert.alert('Succès', 'Vous êtes déconnecté');
+      onClose();
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,69 +126,95 @@ export function AuthModal({ visible, onClose, onAuthSuccess }: AuthModalProps) {
             <Ionicons name="close" size={24} color={COLORS.white} />
           </Pressable>
 
-          {/* Titre */}
-          <Text style={styles.title}>
-            {isSignUp ? 'INSCRIPTION' : 'CONNEXION'}
-          </Text>
+          {userId ? (
+            // Écran de profil si connecté
+            <>
+              <Text style={styles.title}>PROFIL</Text>
+              
+              <View style={styles.profileInfo}>
+                <Text style={styles.connectedText}>Vous êtes connecté en tant que :</Text>
+                <Text style={styles.usernameText}>{username || 'Utilisateur'}</Text>
+              </View>
 
-          {/* Champs du formulaire */}
-          {isSignUp && (
-            <TextInput
-              style={styles.input}
-              placeholder="Pseudo"
-              placeholderTextColor="#666"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-          )}
-
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#666"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Mot de passe"
-            placeholderTextColor="#666"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
-
-          {/* Bouton principal */}
-          <Pressable
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleAuth}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={COLORS.white} />
-            ) : (
-              <Text style={styles.buttonText}>
-                {isSignUp ? 'CRÉER UN COMPTE' : 'SE CONNECTER'}
+              <Pressable
+                style={[styles.button, styles.signOutButton, loading && styles.buttonDisabled]}
+                onPress={handleSignOut}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.buttonText}>DÉCONNEXION</Text>
+                )}
+              </Pressable>
+            </>
+          ) : (
+            // Formulaire d'authentification si non connecté
+            <>
+              <Text style={styles.title}>
+                {isSignUp ? 'INSCRIPTION' : 'CONNEXION'}
               </Text>
-            )}
-          </Pressable>
 
-          {/* Toggle entre inscription/connexion */}
-          <Pressable
-            style={styles.toggleButton}
-            onPress={() => setIsSignUp(!isSignUp)}
-          >
-            <Text style={styles.toggleText}>
-              {isSignUp
-                ? 'Déjà un compte ? Se connecter'
-                : "Pas de compte ? S'inscrire"}
-            </Text>
-          </Pressable>
+              {/* Champs du formulaire */}
+              {isSignUp && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Pseudo"
+                  placeholderTextColor="#666"
+                  value={usernameInput}
+                  onChangeText={setUsernameInput}
+                  autoCapitalize="none"
+                />
+              )}
+
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#666"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Mot de passe"
+                placeholderTextColor="#666"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+
+              {/* Bouton principal */}
+              <Pressable
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleAuth}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    {isSignUp ? 'CRÉER UN COMPTE' : 'SE CONNECTER'}
+                  </Text>
+                )}
+              </Pressable>
+
+              {/* Toggle entre inscription/connexion */}
+              <Pressable
+                style={styles.toggleButton}
+                onPress={() => setIsSignUp(!isSignUp)}
+              >
+                <Text style={styles.toggleText}>
+                  {isSignUp
+                    ? 'Déjà un compte ? Se connecter'
+                    : "Pas de compte ? S'inscrire"}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -246,5 +289,26 @@ const styles = StyleSheet.create({
   toggleText: {
     color: COLORS.emeraldLight,
     fontSize: 14,
+  },
+  profileInfo: {
+    alignItems: 'center',
+    marginVertical: 30,
+  },
+  connectedText: {
+    color: '#999',
+    fontSize: 16,
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  usernameText: {
+    color: COLORS.white,
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  signOutButton: {
+    backgroundColor: COLORS.error,
+    marginTop: 10,
   },
 });
