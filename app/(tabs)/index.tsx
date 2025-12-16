@@ -5,6 +5,8 @@ import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Canvas, Text as SkiaText, Skia, BlurMask, Group, matchFont, Circle } from '@shopify/react-native-skia';
 import Animated, {
   useSharedValue,
@@ -570,8 +572,16 @@ function isTapOnCircle(tapX: number, tapY: number, circleX: number, circleY: num
   return distance <= hitRadius;
 }
 
-// Son unique qui varie en hauteur
+// Sons du jeu
 const TAP_SOUND = require('../../assets/sounds/tap2.mp3');
+
+// Sons du countdown
+const COUNTDOWN_SOUNDS = {
+  '3': require('../../assets/sounds/countdown3.mp3'),
+  '2': require('../../assets/sounds/countdown2.mp3'),
+  '1': require('../../assets/sounds/countdown1.mp3'),
+  'GO': require('../../assets/sounds/countdowngo.mp3'),
+};
 
 // Pool de sons pour permettre plusieurs lectures simultanées
 const SOUND_POOL_SIZE = 5;
@@ -660,11 +670,59 @@ class TapSoundSystem {
 // Instance globale du système de son
 const tapSoundSystem = new TapSoundSystem();
 
+// Fonction pour jouer un son du countdown
+async function playCountdownSound(countdownValue: '3' | '2' | '1' | 'GO') {
+  try {
+    const soundFile = COUNTDOWN_SOUNDS[countdownValue];
+    const { sound } = await Audio.Sound.createAsync(soundFile, {
+      shouldPlay: true,
+      volume: 0.6,
+    });
+    
+    // Nettoyer après la lecture
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync().catch(() => {});
+      }
+    });
+  } catch (error) {
+    console.warn('Error playing countdown sound:', error);
+  }
+}
+
+// Clé pour le stockage du highscore
+const HIGHSCORE_STORAGE_KEY = '@circled_highscore';
+
+// Fonctions pour gérer le highscore persisté
+async function saveHighscore(score: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem(HIGHSCORE_STORAGE_KEY, score.toString());
+    console.log('Highscore saved:', score);
+  } catch (error) {
+    console.warn('Error saving highscore:', error);
+  }
+}
+
+async function loadHighscore(): Promise<number> {
+  try {
+    const value = await AsyncStorage.getItem(HIGHSCORE_STORAGE_KEY);
+    if (value !== null) {
+      const score = parseInt(value, 10);
+      console.log('Highscore loaded:', score);
+      return score;
+    }
+  } catch (error) {
+    console.warn('Error loading highscore:', error);
+  }
+  return 0;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
-  // Highscore (pour l'instant fixé à 0, sera persisté plus tard)
+  // Highscore (persisté localement)
   const [highscore, setHighscore] = useState(0);
+  const [isHighscoreLoaded, setIsHighscoreLoaded] = useState(false);
   
   // Phase du jeu
   const [gamePhase, setGamePhase] = useState<GamePhase>('home');
@@ -727,27 +785,44 @@ export default function HomeScreen() {
     };
   }, []);
 
+  // Charger le highscore au démarrage
+  useEffect(() => {
+    loadHighscore().then(savedHighscore => {
+      setHighscore(savedHighscore);
+      setIsHighscoreLoaded(true);
+    });
+  }, []);
+
   // Gestion du countdown
   useEffect(() => {
     if (gamePhase !== 'countdown') return;
     
-    const countdownSequence = ['3', '2', '1', 'GO'];
+    const countdownSequence: Array<'3' | '2' | '1' | 'GO'> = ['3', '2', '1', 'GO'];
     let currentIndex = 0;
     
     setCountdownValue(countdownSequence[currentIndex]);
+    // Jouer le premier son (3)
+    playCountdownSound(countdownSequence[currentIndex]);
     
     const interval = setInterval(() => {
       currentIndex++;
       if (currentIndex < countdownSequence.length) {
-        setCountdownValue(countdownSequence[currentIndex]);
+        const currentValue = countdownSequence[currentIndex];
+        setCountdownValue(currentValue);
+        
+        // Jouer le son correspondant
+        playCountdownSound(currentValue);
+        
         // Haptic feedback pour chaque étape du countdown
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (currentValue === 'GO') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       } else {
         // Countdown terminé, passer en phase playing
         clearInterval(interval);
         setGamePhase('playing');
-        // Haptic plus fort pour le GO
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     }, 1000);
     
@@ -785,7 +860,10 @@ export default function HomeScreen() {
       // Mettre à jour le highscore si nécessaire
       const currentScore = scoreRef.current;
       if (currentScore > highscore) {
-        setHighscore(currentScore);
+        const newHighscore = currentScore;
+        setHighscore(newHighscore);
+        // Sauvegarder le nouveau highscore
+        saveHighscore(newHighscore);
       }
       
       // Passer en phase game over
@@ -1204,6 +1282,35 @@ export default function HomeScreen() {
           </Animated.View>
         </>
       )}
+      
+      {/* Icônes de navigation en bas (home et gameover) */}
+      {(gamePhase === 'home' || gamePhase === 'gameover') && (
+        <>
+          {/* Icône Leaderboard - Coin inférieur gauche */}
+          <Pressable 
+            style={styles.bottomLeftIcon}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // TODO: Navigation vers le leaderboard
+              console.log('Leaderboard pressed');
+            }}
+          >
+            <Ionicons name="trophy-outline" size={28} color={COLORS.white} />
+          </Pressable>
+          
+          {/* Icône Profil - Coin inférieur droit */}
+          <Pressable 
+            style={styles.bottomRightIcon}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // TODO: Navigation vers le profil
+              console.log('Profile pressed');
+            }}
+          >
+            <Ionicons name="person-circle-outline" size={28} color={COLORS.white} />
+          </Pressable>
+        </>
+      )}
     </View>
   );
 }
@@ -1326,5 +1433,19 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     letterSpacing: 4,
+  },
+  bottomLeftIcon: {
+    position: 'absolute',
+    bottom: 40,
+    left: 30,
+    padding: 10,
+    opacity: 0.8,
+  },
+  bottomRightIcon: {
+    position: 'absolute',
+    bottom: 40,
+    right: 30,
+    padding: 10,
+    opacity: 0.8,
   },
 });
