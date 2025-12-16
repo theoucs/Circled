@@ -207,9 +207,9 @@ function NeonTitle() {
 
 // Dimensions et style pour le Game Over
 const GAMEOVER_GLOW_PADDING = 30;
-const GAMEOVER_CANVAS_WIDTH = 380;
-const GAMEOVER_CANVAS_HEIGHT = 80 + GAMEOVER_GLOW_PADDING * 2;
-const GAMEOVER_FONT_SIZE = 48;
+const GAMEOVER_CANVAS_WIDTH = 450;
+const GAMEOVER_CANVAS_HEIGHT = 96 + GAMEOVER_GLOW_PADDING * 2;
+const GAMEOVER_FONT_SIZE = 58;
 
 const gameOverFontStyle = {
   fontFamily: Platform.select({ ios: 'Helvetica', default: 'sans-serif' }),
@@ -1471,7 +1471,7 @@ const styles = StyleSheet.create({
   },
   gameOverScoreContainer: {
     position: 'absolute',
-    top: '45%',
+    top: '48%',
     left: 0,
     right: 0,
     alignItems: 'center',
