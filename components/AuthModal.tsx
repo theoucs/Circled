@@ -10,7 +10,25 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+
+// Clé pour le stockage du highscore local
+const HIGHSCORE_STORAGE_KEY = '@circled_highscore';
+
+// Fonction pour charger le highscore local
+async function loadLocalHighscore(): Promise<number> {
+  try {
+    const value = await AsyncStorage.getItem(HIGHSCORE_STORAGE_KEY);
+    if (value !== null) {
+      const score = parseInt(value, 10);
+      return score;
+    }
+  } catch (error) {
+    console.warn('Error loading local highscore:', error);
+  }
+  return 0;
+}
 
 const COLORS = {
   background: '#121212',
@@ -55,16 +73,23 @@ export function AuthModal({ visible, onClose, onAuthSuccess, userId, username }:
 
         if (authData.user) {
           // Le profil est créé automatiquement par le trigger
-          // On met à jour uniquement le username
-          await new Promise(resolve => setTimeout(resolve, 500)); // Attendre que le trigger se termine
+          // Charger le highscore local s'il existe
+          const localHighscore = await loadLocalHighscore();
           
+          // Attendre que le trigger se termine
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Mettre à jour le username et le highscore local
           const { error: updateError } = await supabase
             .from('profiles')
-            .update({ username: usernameInput })
+            .update({ 
+              username: usernameInput,
+              highscore: localHighscore 
+            })
             .eq('id', authData.user.id);
 
           if (updateError) {
-            console.warn('Error updating username:', updateError);
+            console.warn('Error updating profile:', updateError);
           }
 
           Alert.alert('Succès', 'Compte créé ! Vous êtes maintenant connecté.');

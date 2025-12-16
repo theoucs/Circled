@@ -832,10 +832,9 @@ export default function HomeScreen() {
       } else {
         setUserId(null);
         setUsername(null);
-        // Recharger le highscore local
-        loadHighscore().then(savedHighscore => {
-          setHighscore(savedHighscore);
-        });
+        // Remettre le highscore à 0 lors de la déconnexion
+        setHighscore(0);
+        saveHighscore(0);
       }
     });
 
@@ -1393,7 +1392,14 @@ export default function HomeScreen() {
       <AuthModal
         visible={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        onAuthSuccess={() => setShowAuthModal(false)}
+        onAuthSuccess={async () => {
+          // Recharger la session pour obtenir l'utilisateur connecté
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            await loadUserProfile(session.user.id);
+          }
+          setShowAuthModal(false);
+        }}
         userId={userId}
         username={username}
       />
