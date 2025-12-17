@@ -538,11 +538,13 @@ function getRandomCirclePosition(
   const maxY = SCREEN_HEIGHT - safeAreaBottom - margin;
   
   // Distance minimale entre les centres de deux cercles (avec une marge de sécurité)
-  const minDistance = CIRCLE_CANVAS_SIZE + 20; // Taille du canvas + 20px de marge
+  // Le rayon visible du cercle est de 50px + glow, donc on veut au moins 150px entre les centres
+  // pour éviter tout chevauchement visuel
+  const minDistance = 150; // Distance suffisante pour éviter tout chevauchement
   
-  // Essayer de trouver une position valide (max 50 tentatives)
+  // Essayer de trouver une position valide (max 100 tentatives)
   let attempts = 0;
-  const maxAttempts = 50;
+  const maxAttempts = 100;
   
   while (attempts < maxAttempts) {
     const x = Math.random() * (maxX - minX) + minX;
@@ -577,6 +579,7 @@ function isTapOnCircle(tapX: number, tapY: number, circleX: number, circleY: num
 
 // Sons du jeu
 const TAP_SOUND = require('../../assets/sounds/tap2.mp3');
+const GAMEOVER_SOUND = require('../../assets/sounds/gameover.mp3');
 
 // Sons du countdown
 const COUNTDOWN_SOUNDS = {
@@ -690,6 +693,24 @@ async function playCountdownSound(countdownValue: '3' | '2' | '1' | 'GO') {
     });
   } catch (error) {
     console.warn('Error playing countdown sound:', error);
+  }
+}
+
+async function playGameOverSound() {
+  try {
+    const { sound } = await Audio.Sound.createAsync(GAMEOVER_SOUND, {
+      shouldPlay: true,
+      volume: 0.7,
+    });
+    
+    // Nettoyer après la lecture
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync().catch(() => {});
+      }
+    });
+  } catch (error) {
+    console.warn('Error playing game over sound:', error);
   }
 }
 
@@ -922,6 +943,9 @@ export default function HomeScreen() {
     // Haptic feedback puissant
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     
+    // Jouer le son de game over
+    playGameOverSound();
+    
     // Après un court flash, lancer l'explosion
     setTimeout(() => {
       setFailingCircle(prev => prev ? { ...prev, state: 'exploding' } : null);
@@ -1068,7 +1092,8 @@ export default function HomeScreen() {
       if (newScore === 10) {
         const doubleDuration = newDuration * 2;
         spawnCircle(doubleDuration);
-        setTimeout(() => spawnCircle(doubleDuration), 50); // Deuxième cercle avec léger décalage
+        // Attendre 100ms pour être sûr que le premier cercle est bien enregistré
+        setTimeout(() => spawnCircle(doubleDuration), 100); // Deuxième cercle avec léger décalage
       } else {
         spawnCircle();
       }
