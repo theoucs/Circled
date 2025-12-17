@@ -780,7 +780,7 @@ async function initializeMusicTracks(
     const { sound: musicFilterSound } = await Audio.Sound.createAsync(MUSIC_FILTER_SOUND, {
       shouldPlay: true,
       isLooping: true,
-      volume: 0.4, // Volume global des musiques
+      volume: 0.6, // Volume global des musiques (augmenté de 50%)
     });
     musicFilterRef.current = musicFilterSound;
     
@@ -802,19 +802,19 @@ async function transitionMusic(
     const steps = 20; // 20 étapes pour une transition fluide
     const duration = 1000; // 1 seconde
     const interval = duration / steps;
-    const volumeStep = 0.4 / steps; // Volume max = 0.4
+    const volumeMax = 0.6; // Volume max = 0.6 (augmenté de 50%)
     
     for (let i = 0; i <= steps; i++) {
       const progress = i / steps;
       
       if (toGameMode) {
         // Transition vers le mode jeu : music monte, musicFilter descend
-        await musicRef.current.setVolumeAsync(progress * 0.4);
-        await musicFilterRef.current.setVolumeAsync((1 - progress) * 0.4);
+        await musicRef.current.setVolumeAsync(progress * volumeMax);
+        await musicFilterRef.current.setVolumeAsync((1 - progress) * volumeMax);
       } else {
         // Transition vers le menu : music descend, musicFilter monte
-        await musicRef.current.setVolumeAsync((1 - progress) * 0.4);
-        await musicFilterRef.current.setVolumeAsync(progress * 0.4);
+        await musicRef.current.setVolumeAsync((1 - progress) * volumeMax);
+        await musicFilterRef.current.setVolumeAsync(progress * volumeMax);
       }
       
       if (i < steps) {
