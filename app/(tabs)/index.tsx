@@ -375,6 +375,7 @@ type GameCircleData = {
   x: number;
   y: number;
   state: CircleState;
+  duration: number; // Durée de vie du cercle en ms
 };
 
 // Configuration de l'explosion
@@ -519,6 +520,50 @@ function GameCircle({ state = 'normal' }: { state?: CircleState }) {
       {/* Cercle principal */}
       <Circle cx={center} cy={center} r={radius} color={colors.circle} />
     </Canvas>
+  );
+}
+
+// Approach Circle (indicateur de timing comme dans Osu!)
+function ApproachCircle({ duration }: { duration: number }) {
+  const scale = useSharedValue(2); // Commence à 2x la taille
+  const opacity = useSharedValue(0.8);
+  
+  useEffect(() => {
+    // Animation qui rétrécit le cercle jusqu'à la taille du cercle cible
+    scale.value = withTiming(1, {
+      duration: duration,
+      easing: Easing.linear,
+    });
+    
+    // Fade out léger vers la fin
+    opacity.value = withTiming(0.4, {
+      duration: duration,
+      easing: Easing.in(Easing.ease),
+    });
+  }, [duration]);
+  
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+  
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          width: GAME_CONFIG.circleSize,
+          height: GAME_CONFIG.circleSize,
+          borderRadius: GAME_CONFIG.circleSize / 2,
+          borderWidth: 3,
+          borderColor: COLORS.white,
+          top: CIRCLE_GLOW_PADDING,
+          left: CIRCLE_GLOW_PADDING,
+        },
+        animatedStyle,
+      ]}
+      pointerEvents="none"
+    />
   );
 }
 
@@ -1116,12 +1161,14 @@ export default function HomeScreen() {
     const existingCircles = circlesRef.current;
     const newPosition = getRandomCirclePosition(insets.top, insets.bottom, existingCircles);
     const circleId = Date.now() + Math.random(); // ID unique
+    const duration = customDuration || currentDurationRef.current;
     
     const newCircle: GameCircleData = {
       id: circleId,
       x: newPosition.x,
       y: newPosition.y,
       state: 'normal',
+      duration: duration,
     };
     
     // Mettre à jour la ref IMMÉDIATEMENT (pour les spawns rapides)
@@ -1132,7 +1179,6 @@ export default function HomeScreen() {
     
     // Timer pour la disparition (game over si pas cliqué à temps)
     // Chaque cercle a son propre timer indépendant
-    const duration = customDuration || currentDurationRef.current;
     console.log('Spawning circle', circleId, 'with duration', duration);
     
     const timer = setTimeout(() => {
@@ -1406,6 +1452,8 @@ export default function HomeScreen() {
           exiting={ZoomOut.duration(100)}
         >
           <GameCircle state={circle.state} />
+          {/* Approach Circle (indicateur de timing) */}
+          <ApproachCircle duration={circle.duration} />
           {/* Zone de tap transparente par-dessus le cercle */}
           <Pressable 
             style={styles.circleHitArea}
