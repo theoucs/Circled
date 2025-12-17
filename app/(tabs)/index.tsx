@@ -580,6 +580,7 @@ function isTapOnCircle(tapX: number, tapY: number, circleX: number, circleY: num
 // Sons du jeu
 const TAP_SOUND = require('../../assets/sounds/tap2.mp3');
 const GAMEOVER_SOUND = require('../../assets/sounds/gameover.mp3');
+const MUSIC_SOUND = require('../../assets/sounds/music.mp3');
 
 // Sons du countdown
 const COUNTDOWN_SOUNDS = {
@@ -714,6 +715,40 @@ async function playGameOverSound() {
   }
 }
 
+async function startMusic(musicRef: React.MutableRefObject<Audio.Sound | null>) {
+  try {
+    // Arrêter la musique précédente si elle existe
+    if (musicRef.current) {
+      await musicRef.current.stopAsync();
+      await musicRef.current.unloadAsync();
+      musicRef.current = null;
+    }
+    
+    // Charger et jouer la nouvelle musique en boucle
+    const { sound } = await Audio.Sound.createAsync(MUSIC_SOUND, {
+      shouldPlay: true,
+      isLooping: true,
+      volume: 0.4, // Volume modéré pour ne pas couvrir les autres sons
+    });
+    
+    musicRef.current = sound;
+  } catch (error) {
+    console.warn('Error starting music:', error);
+  }
+}
+
+async function stopMusic(musicRef: React.MutableRefObject<Audio.Sound | null>) {
+  try {
+    if (musicRef.current) {
+      await musicRef.current.stopAsync();
+      await musicRef.current.unloadAsync();
+      musicRef.current = null;
+    }
+  } catch (error) {
+    console.warn('Error stopping music:', error);
+  }
+}
+
 // Clé pour le stockage du highscore
 const HIGHSCORE_STORAGE_KEY = '@circled_highscore';
 
@@ -827,6 +862,7 @@ export default function HomeScreen() {
     // Nettoyer les sons au démontage du composant
     return () => {
       tapSoundSystem.cleanup();
+      stopMusic(musicSoundRef);
     };
   }, []);
 
@@ -889,6 +925,8 @@ export default function HomeScreen() {
         // Haptic feedback pour chaque étape du countdown
         if (currentValue === 'GO') {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          // Démarrer la musique de fond
+          startMusic(musicSoundRef);
         } else {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
@@ -942,6 +980,9 @@ export default function HomeScreen() {
     
     // Haptic feedback puissant
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    
+    // Arrêter la musique
+    stopMusic(musicSoundRef);
     
     // Jouer le son de game over
     playGameOverSound();
@@ -1102,6 +1143,9 @@ export default function HomeScreen() {
 
   // Flag pour éviter le double déclenchement
   const circleJustHitRef = useRef(false);
+  
+  // Ref pour la musique de fond
+  const musicSoundRef = useRef<Audio.Sound | null>(null);
   
   // Gestion du tap à côté du cercle (= game over)
   const handleMissedTap = useCallback(() => {
