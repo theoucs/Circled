@@ -581,6 +581,8 @@ function isTapOnCircle(tapX: number, tapY: number, circleX: number, circleY: num
 const TAP_SOUND = require('../../assets/sounds/tap2.mp3');
 const GAMEOVER_SOUND = require('../../assets/sounds/gameover.mp3');
 const MUSIC_SOUND = require('../../assets/sounds/music.mp3');
+const MUSIC_FILTER_SOUND = require('../../assets/sounds/musicfilter.mp3');
+const CLICK_SOUND = require('../../assets/sounds/tap2.mp3'); // Réutiliser le son de tap pour le clic
 
 // Sons du countdown
 const COUNTDOWN_SOUNDS = {
@@ -715,37 +717,106 @@ async function playGameOverSound() {
   }
 }
 
-async function startMusic(musicRef: React.MutableRefObject<Audio.Sound | null>) {
+// Initialiser les deux pistes de musique au démarrage
+async function initializeMusicTracks(
+  musicRef: React.MutableRefObject<Audio.Sound | null>,
+  musicFilterRef: React.MutableRefObject<Audio.Sound | null>
+) {
   try {
-    // Arrêter la musique précédente si elle existe
-    if (musicRef.current) {
-      await musicRef.current.stopAsync();
-      await musicRef.current.unloadAsync();
-      musicRef.current = null;
-    }
-    
-    // Charger et jouer la nouvelle musique en boucle
-    const { sound } = await Audio.Sound.createAsync(MUSIC_SOUND, {
+    // Charger la musique normale (volume 0 au début)
+    const { sound: musicSound } = await Audio.Sound.createAsync(MUSIC_SOUND, {
       shouldPlay: true,
       isLooping: true,
-      volume: 0.4, // Volume modéré pour ne pas couvrir les autres sons
+      volume: 0.0,
     });
+    musicRef.current = musicSound;
     
-    musicRef.current = sound;
+    // Charger la musique filtrée (volume 1 au début)
+    const { sound: musicFilterSound } = await Audio.Sound.createAsync(MUSIC_FILTER_SOUND, {
+      shouldPlay: true,
+      isLooping: true,
+      volume: 0.4, // Volume global des musiques
+    });
+    musicFilterRef.current = musicFilterSound;
+    
+    console.log('Music tracks initialized');
   } catch (error) {
-    console.warn('Error starting music:', error);
+    console.warn('Error initializing music tracks:', error);
   }
 }
 
-async function stopMusic(musicRef: React.MutableRefObject<Audio.Sound | null>) {
+// Transition progressive entre les deux pistes (1 seconde)
+async function transitionMusic(
+  musicRef: React.MutableRefObject<Audio.Sound | null>,
+  musicFilterRef: React.MutableRefObject<Audio.Sound | null>,
+  toGameMode: boolean // true = passer en mode jeu, false = retour au menu
+) {
+  try {
+    if (!musicRef.current || !musicFilterRef.current) return;
+    
+    const steps = 20; // 20 étapes pour une transition fluide
+    const duration = 1000; // 1 seconde
+    const interval = duration / steps;
+    const volumeStep = 0.4 / steps; // Volume max = 0.4
+    
+    for (let i = 0; i <= steps; i++) {
+      const progress = i / steps;
+      
+      if (toGameMode) {
+        // Transition vers le mode jeu : music monte, musicFilter descend
+        await musicRef.current.setVolumeAsync(progress * 0.4);
+        await musicFilterRef.current.setVolumeAsync((1 - progress) * 0.4);
+      } else {
+        // Transition vers le menu : music descend, musicFilter monte
+        await musicRef.current.setVolumeAsync((1 - progress) * 0.4);
+        await musicFilterRef.current.setVolumeAsync(progress * 0.4);
+      }
+      
+      if (i < steps) {
+        await new Promise(resolve => setTimeout(resolve, interval));
+      }
+    }
+  } catch (error) {
+    console.warn('Error during music transition:', error);
+  }
+}
+
+// Nettoyer les musiques
+async function cleanupMusic(
+  musicRef: React.MutableRefObject<Audio.Sound | null>,
+  musicFilterRef: React.MutableRefObject<Audio.Sound | null>
+) {
   try {
     if (musicRef.current) {
       await musicRef.current.stopAsync();
       await musicRef.current.unloadAsync();
       musicRef.current = null;
     }
+    if (musicFilterRef.current) {
+      await musicFilterRef.current.stopAsync();
+      await musicFilterRef.current.unloadAsync();
+      musicFilterRef.current = null;
+    }
   } catch (error) {
-    console.warn('Error stopping music:', error);
+    console.warn('Error cleaning up music:', error);
+  }
+}
+
+async function playClickSound() {
+  try {
+    const { sound } = await Audio.Sound.createAsync(CLICK_SOUND, {
+      shouldPlay: true,
+      volume: 0.5,
+    });
+    
+    // Nettoyer après la lecture
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync().catch(() => {});
+      }
+    });
+  } catch (error) {
+    console.warn('Error playing click sound:', error);
   }
 }
 
@@ -859,10 +930,13 @@ export default function HomeScreen() {
       console.warn('Error initializing tap sounds:', error)
     );
     
+    // Initialiser les pistes de musique (démarrage immédiat)
+    initializeMusicTracks(musicRef, musicFilterRef);
+    
     // Nettoyer les sons au démontage du composant
     return () => {
       tapSoundSystem.cleanup();
-      stopMusic(musicSoundRef);
+      cleanupMusic(musicRef, musicFilterRef);
     };
   }, []);
 
@@ -925,8 +999,8 @@ export default function HomeScreen() {
         // Haptic feedback pour chaque étape du countdown
         if (currentValue === 'GO') {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          // Démarrer la musique de fond
-          startMusic(musicSoundRef);
+          // Transition vers la musique de jeu
+          transitionMusic(musicRef, musicFilterRef, true);
         } else {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
@@ -981,8 +1055,8 @@ export default function HomeScreen() {
     // Haptic feedback puissant
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     
-    // Arrêter la musique
-    stopMusic(musicSoundRef);
+    // Transition vers la musique de menu
+    transitionMusic(musicRef, musicFilterRef, false);
     
     // Jouer le son de game over
     playGameOverSound();
@@ -1144,8 +1218,9 @@ export default function HomeScreen() {
   // Flag pour éviter le double déclenchement
   const circleJustHitRef = useRef(false);
   
-  // Ref pour la musique de fond
-  const musicSoundRef = useRef<Audio.Sound | null>(null);
+  // Refs pour les deux pistes de musique (toujours en lecture)
+  const musicRef = useRef<Audio.Sound | null>(null);
+  const musicFilterRef = useRef<Audio.Sound | null>(null);
   
   // Gestion du tap à côté du cercle (= game over)
   const handleMissedTap = useCallback(() => {
@@ -1229,6 +1304,9 @@ export default function HomeScreen() {
   };
 
   const handleStart = () => {
+    // Jouer le son de clic
+    playClickSound();
+    
     // Passer en phase starting pour faire tomber le titre
     setGamePhase('starting');
     // Attendre la fin de l'animation de chute (400ms) puis lancer le countdown
@@ -1238,6 +1316,9 @@ export default function HomeScreen() {
   };
 
   const handleRestart = () => {
+    // Jouer le son de clic
+    playClickSound();
+    
     // Relancer le jeu
     startCountdown();
   };
