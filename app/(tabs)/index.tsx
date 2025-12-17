@@ -895,6 +895,8 @@ export default function HomeScreen() {
   // Refs pour accéder aux valeurs actuelles dans les callbacks
   const currentDurationRef = useRef(GAME_CONFIG.initialDuration);
   const scoreRef = useRef(0);
+  const userIdRef = useRef<string | null>(null);
+  const highscoreRef = useRef(0);
   
   // Animation pour l'effet néon pulsant (bouton)
   const glowIntensity = useSharedValue(1);
@@ -913,6 +915,14 @@ export default function HomeScreen() {
   useEffect(() => {
     scoreRef.current = score;
   }, [score]);
+  
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
+  
+  useEffect(() => {
+    highscoreRef.current = highscore;
+  }, [highscore]);
 
   useEffect(() => {
     // Animation du bouton
@@ -1070,15 +1080,18 @@ export default function HomeScreen() {
     setTimeout(() => {
       setFailingCircle(null);
       
-      // Mettre à jour le highscore si nécessaire
+      // Mettre à jour le highscore si nécessaire (utiliser les refs pour valeurs à jour)
       const currentScore = scoreRef.current;
-      if (currentScore > highscore) {
+      const currentHighscore = highscoreRef.current;
+      const currentUserId = userIdRef.current;
+      
+      if (currentScore > currentHighscore) {
         const newHighscore = currentScore;
         setHighscore(newHighscore);
         
         // Sauvegarder sur Supabase si connecté, sinon en local
-        if (userId) {
-          saveHighscoreToSupabase(userId, newHighscore);
+        if (currentUserId) {
+          saveHighscoreToSupabase(currentUserId, newHighscore);
         } else {
           saveHighscore(newHighscore);
         }
@@ -1087,7 +1100,7 @@ export default function HomeScreen() {
       // Passer en phase game over
       setGamePhase('gameover');
     }, 500);
-  }, [highscore]);
+  }, []); // Plus de dépendances : on utilise uniquement des refs
 
   // Ref pour les cercles (pour les passer à getRandomCirclePosition)
   const circlesRef = useRef<GameCircleData[]>([]);
