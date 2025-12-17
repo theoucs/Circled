@@ -1183,8 +1183,12 @@ export default function HomeScreen() {
     setScore(newScore);
     scoreRef.current = newScore;
     
-    // Accélérer (réduire la durée)
-    const newDuration = Math.max(GAME_CONFIG.minDuration, Math.round(currentDurationRef.current * GAME_CONFIG.accelerationFactor));
+    // Accélérer (réduire la durée) avec paramètres adaptatifs
+    // À partir de 35 points : multiplicateur plus lent (0.99 au lieu de 0.98) et durée min réduite (350ms au lieu de 400ms)
+    const accelerationFactor = newScore >= 35 ? 0.99 : GAME_CONFIG.accelerationFactor;
+    const minDuration = newScore >= 35 ? 350 : GAME_CONFIG.minDuration;
+    
+    const newDuration = Math.max(minDuration, Math.round(currentDurationRef.current * accelerationFactor));
     setCurrentDuration(newDuration);
     currentDurationRef.current = newDuration;
     
